@@ -1,0 +1,137 @@
+name: Merge Results EU (09:00 UTC)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  merge-eu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Merge results-eu-1.js + results-eu-2.js -> results-eu.js
+        working-directory: Albion_ProfitChecker/ui
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const read = (p) => {
+            if (!fs.existsSync(p)) {
+              console.error('Missing file:', p);
+              return [];
+            }
+            const raw = fs.readFileSync(p, 'utf8')
+              .replace(/^\uFEFF/, '')
+              .replace(/^window\.results\s*=\s*/, '')
+              .replace(/;?\s*$/, '');
+            const match = raw.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+            if (!match) {
+              console.error('Invalid JSON format in:', p);
+              return [];
+            }
+            try {
+              return JSON.parse(match[0]);
+            } catch (err) {
+              console.error('JSON parse failed in:', p, err.message);
+              return [];
+            }
+          };
+          const a = read('results-eu-1.js');
+          const b = read('results-eu-2.js');
+          const merged = [...a, ...b];
+          fs.writeFileSync('results-eu.js', 'window.results = ' + JSON.stringify(merged) + ';');
+          console.log('Merged EU', a.length, '+', b.length, '=', merged.length);
+          NODE
+
+      - name: Build Blackmarket-Crafter data/bm-crafter-us.json + data/bm-crafter-eu.json
+        working-directory: Albion_ProfitChecker/ui
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const dir = 'Blackmarket-Crafter/data';
+          fs.mkdirSync(dir, { recursive: true });
+
+          const read = (p) => {
+            if (!fs.existsSync(p)) return [];
+            const raw = fs.readFileSync(p, 'utf8')
+              .replace(/^\uFEFF/, '')
+              .replace(/^window\\.results\\s*=\\s*/, '')
+              .replace(/;?\\s*$/, '');
+            const match = raw.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+            if (!match) {
+              console.error('Invalid JSON format in:', p);
+              return [];
+            }
+            try {
+              return JSON.parse(match[0]);
+            } catch (err) {
+              console.error('JSON parse failed in:', p, err.message);
+              return [];
+            }
+          };
+
+          const pick = (rows, region) => rows.map((r) => ({
+            region,
+            id: r.id,
+            bm: r.bm,
+            sold: r.sold
+          }));
+
+          let us = read('results.js');
+          if (!us.length) {
+            us = [...read('results-1.js'), ...read('results-2.js')];
+          }
+          let eu = read('results-eu.js');
+          if (!eu.length) {
+            eu = [...read('results-eu-1.js'), ...read('results-eu-2.js')];
+          }
+
+          const outUs = pick(us, 'us');
+          const outEu = pick(eu, 'eu');
+          fs.writeFileSync(dir + '/bm-crafter-us.json', JSON.stringify({
+            generatedAt: new Date().toISOString(),
+            region: 'us',
+            count: outUs.length,
+            items: outUs
+          }));
+          fs.writeFileSync(dir + '/bm-crafter-eu.json', JSON.stringify({
+            generatedAt: new Date().toISOString(),
+            region: 'eu',
+            count: outEu.length,
+            items: outEu
+          }));
+          console.log('BM Crafter US:', outUs.length, 'EU:', outEu.length);
+          NODE
+
+      - name: Commit merged results EU
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain Albion_ProfitChecker/ui/results-eu.js Albion_ProfitChecker/ui/Blackmarket-Crafter/data/bm-crafter-us.json Albion_ProfitChecker/ui/Blackmarket-Crafter/data/bm-crafter-eu.json)" ]; then
+            git add Albion_ProfitChecker/ui/results-eu.js Albion_ProfitChecker/ui/Blackmarket-Crafter/data/bm-crafter-us.json Albion_ProfitChecker/ui/Blackmarket-Crafter/data/bm-crafter-eu.json
+            git commit -m "chore: merge results EU + bm crafter data"
+          else
+            echo "Keine Aenderungen in results-eu.js"
+          fi
+
+      - name: Push changes
+        if: success()
+        run: |
+          branch=$(git rev-parse --abbrev-ref HEAD)
+          git pull --rebase origin "$branch" || true
+          if [ -n "$(git log origin/$(git rev-parse --abbrev-ref HEAD)..HEAD)" ]; then
+            git push
+          else
+            echo "Nichts zu pushen"
+          fi
+
+      - name: Trigger Vercel Deploy Hook
+        if: env.VERCEL_DEPLOY_HOOK_URL != ''
+        env:
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: curl -X POST "$VERCEL_DEPLOY_HOOK_URL"
