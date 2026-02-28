@@ -35,12 +35,22 @@ jobs:
         if: success()
         run: |
           branch=$(git rev-parse --abbrev-ref HEAD)
-          git pull --rebase origin "$branch" || true
-          if [ -n "$(git log origin/$(git rev-parse --abbrev-ref HEAD)..HEAD)" ]; then
-            git push
-          else
-            echo "Nichts zu pushen"
+          git fetch origin "$branch"
+          if [ -z "$(git log origin/$branch..HEAD)" ]; then
+            echo "Nothing to push"
+            exit 0
           fi
+          for attempt in 1 2 3; do
+            echo "Push attempt $attempt"
+            if git pull --rebase --autostash origin "$branch" && git push origin "$branch"; then
+              echo "Push successful"
+              exit 0
+            fi
+            sleep 2
+            git fetch origin "$branch"
+          done
+          echo "Push failed after 3 attempts"
+          exit 1
 
       - name: Trigger Vercel Deploy Hook
         if: env.VERCEL_DEPLOY_HOOK_URL != ''
