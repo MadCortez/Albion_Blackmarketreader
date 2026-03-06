@@ -168,7 +168,6 @@ internal static class Program
 
         Console.WriteLine("Lokaler Server gestartet: http://localhost:5173");
         Console.WriteLine("Passwort für Dashboard: testo");
-        TryOpenBrowser("http://localhost:5173");
         await app.RunAsync();
     }
 
@@ -463,23 +462,6 @@ internal static class Program
 
     private static string FormatDate(DateTime? utc)
         => utc.HasValue ? utc.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "n/a";
-
-    private static void TryOpenBrowser(string url)
-    {
-        try
-        {
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true
-            };
-            System.Diagnostics.Process.Start(psi);
-        }
-        catch
-        {
-            // ignore
-        }
-    }
 
     private static async Task<(double avgPrice, double avgSoldPerDay, int daysUsed, int pointsUsed)>
         GetBmAveragesAsync(
