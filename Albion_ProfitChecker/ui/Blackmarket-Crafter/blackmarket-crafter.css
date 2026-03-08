@@ -456,6 +456,74 @@ td {
   color: var(--text-muted);
 }
 
+th {
+  white-space: nowrap;
+}
+
+th.sortable {
+  cursor: pointer;
+}
+
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+}
+
+th.num .sort-button {
+  justify-content: flex-end;
+}
+
+th.center .sort-button {
+  justify-content: center;
+}
+
+.sort-button::after {
+  content: "↕";
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-muted);
+  opacity: 0.6;
+  transition: color 120ms ease, opacity 120ms ease;
+}
+
+th.sortable:hover .sort-button,
+th.sortable:focus-within .sort-button {
+  color: #e2e8f0;
+}
+
+th.sortable:hover .sort-button::after,
+th.sortable:focus-within .sort-button::after {
+  opacity: 1;
+}
+
+th[data-sort-direction="asc"] .sort-button,
+th[data-sort-direction="desc"] .sort-button {
+  color: var(--primary);
+}
+
+th[data-sort-direction="asc"] .sort-button::after {
+  content: "↑";
+  color: var(--primary);
+  opacity: 1;
+}
+
+th[data-sort-direction="desc"] .sort-button::after {
+  content: "↓";
+  color: var(--primary);
+  opacity: 1;
+}
+
 tbody td {
   text-transform: none;
   letter-spacing: normal;

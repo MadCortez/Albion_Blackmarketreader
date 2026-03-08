@@ -122,13 +122,27 @@
           <table>
             <thead>
               <tr>
-                <th>Item Specification</th>
-                <th class="num">BM Price</th>
-                <th class="num">Craft Cost</th>
-                <th class="num">Net Profit / U</th>
-                <th class="center">Sold/Day</th>
-                <th class="num">Daily Potential</th>
-                <th class="num">Profit %</th>
+                <th class="sortable" data-sort-key="item" aria-sort="none">
+                  <button type="button" class="sort-button">Item Specification</button>
+                </th>
+                <th class="num sortable" data-sort-key="bm" aria-sort="none">
+                  <button type="button" class="sort-button">BM Price</button>
+                </th>
+                <th class="num sortable" data-sort-key="craftCost" aria-sort="none">
+                  <button type="button" class="sort-button">Craft Cost</button>
+                </th>
+                <th class="num sortable" data-sort-key="profit" aria-sort="none">
+                  <button type="button" class="sort-button">Net Profit / U</button>
+                </th>
+                <th class="center sortable" data-sort-key="sold" aria-sort="none">
+                  <button type="button" class="sort-button">Sold/Day</button>
+                </th>
+                <th class="num sortable" data-sort-key="daily" aria-sort="none">
+                  <button type="button" class="sort-button">Daily Potential</button>
+                </th>
+                <th class="num sortable" data-sort-key="profitPct" aria-sort="none">
+                  <button type="button" class="sort-button">Profit %</button>
+                </th>
               </tr>
             </thead>
             <tbody id="bmTableBody"></tbody>

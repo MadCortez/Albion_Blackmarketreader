@@ -1,10 +1,11 @@
-﻿(function setupCrafterTable() {
+(function setupCrafterTable() {
   const regionToggle = document.getElementById("regionToggle");
   const regionLabel = document.getElementById("regionLabel");
   const lastUpdated = document.getElementById("lastUpdated");
   const tableBody = document.getElementById("bmTableBody");
   const tableSummary = document.getElementById("tableSummary");
   const tableWrap = document.querySelector(".table-wrap");
+  const tableHeaders = Array.from(document.querySelectorAll(".bm-table thead th[data-sort-key]"));
   const tierFilter = document.getElementById("tierFilter");
   const enchantFilter = document.getElementById("enchantFilter");
   const soldRange = document.getElementById("soldRange");
@@ -42,6 +43,8 @@
   let searchTerm = "";
   let filteredItems = [];
   let visibleCount = 0;
+  let currentSortKey = "profitPct";
+  let currentSortDirection = "desc";
   const batchSize = 60;
   const avatarFallback = "/picture/accountsymbol.png";
   let accountPanel = null;
@@ -368,11 +371,108 @@
     "LEATHER": "Leather"
   };
 
+  const sortDefaults = {
+    item: "asc",
+    bm: "desc",
+    craftCost: "desc",
+    profit: "desc",
+    sold: "desc",
+    daily: "desc",
+    profitPct: "desc"
+  };
+
   function formatMaterialLabel(key, tier, enchant) {
     const base = materialNameMap[key] || key || "Material";
     const tierLabel = tier ? `T${tier}` : "";
     const enchantLabel = Number.isFinite(enchant) ? `.${enchant}` : "";
     return `${tierLabel} ${base} ${enchantLabel}`.trim();
+  }
+
+  function getDisplayName(item) {
+    const baseId = normalizeItemId(item && item.id);
+    const recipe = getRecipe(item && item.id);
+    return nameMap[baseId] || (recipe && recipe.name) || baseId || "Unknown Item";
+  }
+
+  function getSortValue(item, sortKey) {
+    switch (sortKey) {
+      case "item":
+        return getDisplayName(item);
+      case "bm":
+        return Number.isFinite(item.bm) ? item.bm : null;
+      case "craftCost":
+        return Number.isFinite(item._craftCost) ? item._craftCost : null;
+      case "profit":
+        return Number.isFinite(item._profit) ? item._profit : null;
+      case "sold":
+        return Number.isFinite(Number(item.sold)) ? Number(item.sold) : null;
+      case "daily":
+        return Number.isFinite(item._profit) && Number.isFinite(Number(item.sold))
+          ? item._profit * Number(item.sold)
+          : null;
+      case "profitPct":
+        return Number.isFinite(item._profitPct) ? item._profitPct : null;
+      default:
+        return null;
+    }
+  }
+
+  function compareSortValues(aValue, bValue, direction) {
+    const modifier = direction === "asc" ? 1 : -1;
+    const aMissing = aValue === null || aValue === undefined || Number.isNaN(aValue);
+    const bMissing = bValue === null || bValue === undefined || Number.isNaN(bValue);
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+    if (typeof aValue === "string" || typeof bValue === "string") {
+      return String(aValue).localeCompare(String(bValue)) * modifier;
+    }
+    return (aValue - bValue) * modifier;
+  }
+
+  function sortItems(items) {
+    return [...items].sort((a, b) => {
+      const primary = compareSortValues(
+        getSortValue(a, currentSortKey),
+        getSortValue(b, currentSortKey),
+        currentSortDirection
+      );
+      if (primary !== 0) return primary;
+      return String(a.id || "").localeCompare(String(b.id || ""));
+    });
+  }
+
+  function syncSortHeaders() {
+    tableHeaders.forEach((header) => {
+      const isActive = header.getAttribute("data-sort-key") === currentSortKey;
+      if (isActive) {
+        header.setAttribute("data-sort-direction", currentSortDirection);
+        header.setAttribute(
+          "aria-sort",
+          currentSortDirection === "asc" ? "ascending" : "descending"
+        );
+      } else {
+        header.removeAttribute("data-sort-direction");
+        header.setAttribute("aria-sort", "none");
+      }
+    });
+  }
+
+  function setSort(sortKey) {
+    if (!sortKey) return;
+    if (currentSortKey === sortKey) {
+      currentSortDirection = currentSortDirection === "asc" ? "desc" : "asc";
+    } else {
+      currentSortKey = sortKey;
+      currentSortDirection = sortDefaults[sortKey] || "desc";
+    }
+    syncSortHeaders();
+    if (filteredItems.length) {
+      filteredItems = sortItems(filteredItems);
+      if (tableWrap) tableWrap.scrollTop = 0;
+      renderRows(filteredItems, true);
+      updateInsight(filteredItems[0]);
+    }
   }
 
   function renderMaterialBreakdown(item) {
@@ -742,9 +842,7 @@
       const sold = Number(item.sold || 0);
       if (sold < minSold) return false;
       if (searchTerm) {
-        const baseId = normalizeItemId(item.id);
-        const recipe = getRecipe(item.id);
-        const displayName = nameMap[baseId] || (recipe && recipe.name) || baseId || "";
+        const displayName = getDisplayName(item);
         if (!String(displayName).toLowerCase().includes(searchTerm)) return false;
       }
       const recipe = getRecipe(item.id);
@@ -775,11 +873,8 @@
       item._profitPct = Number.isFinite(profitPct) ? profitPct : null;
       return true;
     });
-    filteredItems = [...filtered].sort((a, b) => {
-      const aPct = Number.isFinite(a._profitPct) ? a._profitPct : -Infinity;
-      const bPct = Number.isFinite(b._profitPct) ? b._profitPct : -Infinity;
-      return bPct - aPct;
-    });
+    filteredItems = sortItems(filtered);
+    syncSortHeaders();
     if (tableWrap) tableWrap.scrollTop = 0;
     renderRows(filteredItems, true);
     if (filteredItems.length) {
@@ -1215,6 +1310,14 @@
     applyFilters();
   });
 
+  tableHeaders.forEach((header) => {
+    const sortKey = header.getAttribute("data-sort-key");
+    const button = header.querySelector(".sort-button");
+    if (button) {
+      button.addEventListener("click", () => setSort(sortKey));
+    }
+  });
+
   if (tableWrap) {
     tableWrap.addEventListener("scroll", () => {
       const nearBottom = tableWrap.scrollTop + tableWrap.clientHeight >= tableWrap.scrollHeight - 120;
@@ -1224,6 +1327,7 @@
 
   setActive(tierFilter, "data-tier", selectedTier);
   setActive(enchantFilter, "data-enchant", selectedEnchant);
+  syncSortHeaders();
   updateSlider();
   updateReturnRate();
   renderEmpty();
